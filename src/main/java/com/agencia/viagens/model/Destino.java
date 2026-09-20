@@ -1,35 +1,61 @@
 package com.agencia.viagens.model;
 
-import java.util.UUID;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
+@Entity
+@Table(name = "tb_destinos")
 public class Destino {
-    private String id;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @NotBlank(message = "O nome do destino é obrigatório.")
+    @Size(max = 150, message = "O nome não pode ter mais de 150 caracteres.")
+    @Column(nullable = false, length = 150)
     private String nome;
+
+    @NotBlank(message = "A localização do destino é obrigatória.")
+    @Size(max = 150, message = "A localização não pode ter mais de 150 caracteres.")
+    @Column(nullable = false, length = 150)
     private String localizacao;
+
+    @Size(max = 1000, message = "A descrição não pode ter mais de 1000 caracteres.")
+    @Column(length = 1000)
     private String descricao;
+
+    @Column(nullable = false)
     private double mediaAvaliacoes;
+
+    @Column(nullable = false)
     private int quantidadeAvaliacoes;
 
     public Destino() {
-        this.id = UUID.randomUUID().toString();
         this.mediaAvaliacoes = 0.0;
         this.quantidadeAvaliacoes = 0;
     }
 
+    public Destino(String nome, String localizacao, String descricao) {
+        this();
+        this.nome = nome;
+        this.localizacao = localizacao;
+        this.descricao = descricao;
+    }
 
     public void registrarAvaliacao(double nota) {
         double somaAtual = this.mediaAvaliacoes * this.quantidadeAvaliacoes;
         somaAtual += nota;
         this.quantidadeAvaliacoes++;
-        this.mediaAvaliacoes = somaAtual / this.quantidadeAvaliacoes;
+        this.mediaAvaliacoes = Math.round((somaAtual / this.quantidadeAvaliacoes) * 10.0) / 10.0;
     }
 
-
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

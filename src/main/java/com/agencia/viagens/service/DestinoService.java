@@ -1,57 +1,76 @@
 package com.agencia.viagens.service;
 
+import com.agencia.viagens.dto.DestinoRequestDTO;
+import com.agencia.viagens.exception.BusinessException;
+import com.agencia.viagens.exception.ResourceNotFoundException;
 import com.agencia.viagens.model.Destino;
+import com.agencia.viagens.repository.DestinoRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
 
 @Service
 public class DestinoService {
-    private final Map<String, Destino> destinos = new HashMap<>();
 
-    public Destino cadastrar(Destino destino) {
-        destinos.put(destino.getId(), destino);
-        return destino;
+    private final DestinoRepository destinoRepository;
+
+    public DestinoService(DestinoRepository destinoRepository) {
+        this.destinoRepository = destinoRepository;
     }
 
+    @Transactional
+    public Destino cadastrar(DestinoRequestDTO dto) {
+        Destino destino = new Destino(dto.getNome(), dto.getLocalizacao(), dto.getDescricao());
+        return destinoRepository.save(destino);
+    }
+
+    @Transactional(readOnly = true)
     public List<Destino> listarTodos() {
-        return new ArrayList<>(destinos.values());
+        return destinoRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
+    public Destino buscarPorId(Long id) {
+        return destinoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Destino não encontrado com ID: " + id));
+    }
+
+    @Transactional(readOnly = true)
     public List<Destino> pesquisar(String nome, String localizacao) {
-        return destinos.values().stream()
-                .filter(d -> (nome == null || d.getNome().toLowerCase().contains(nome.toLowerCase())) &&
-                        (localizacao == null || d.getLocalizacao().toLowerCase().contains(localizacao.toLowerCase())))
-                .toList();
-    }
+        String nomeFiltro = (nome != null && !nome.isBlank()) ? nome.trim() : null;
+        String localizacaoFiltro = (localizacao != null && !localizacao.isBlank()) ? localizacao.trim() : null;
 
-    public Optional<Destino> buscarPorId(String id) {
-        return Optional.ofNullable(destinos.get(id));
-    }
-
-    public Destino atualizar(String id, Destino destinoAtualizado) {
-        if (destinos.containsKey(id)) {
-            Destino existente = destinos.get(id);
-            destinoAtualizado.setId(id);
-            destinoAtualizado.setMediaAvaliacoes(existente.getMediaAvaliacoes());
-            destinoAtualizado.setQuantidadeAvaliacoes(existente.getQuantidadeAvaliacoes());
-
-            destinos.put(id, destinoAtualizado);
-            return destinoAtualizado;
+        if (nomeFiltro == null && localizacaoFiltro == null) {
+            return destinoRepository.findAll();
         }
-        return null;
+
+        return destinoRepository.pesquisarPorNomeELocalizacao(nomeFiltro, localizacaoFiltro);
     }
 
-    public Destino avaliar(String id, double nota) {
-        Destino destino = destinos.get(id);
-        if (destino != null) {
-            destino.registrarAvaliacao(nota);
-            return destino;
+    @Transactional
+    public Destino atualizar(Long id, DestinoRequestDTO dto) {
+        Destino destino = buscarPorId(id);
+        destino.setNome(dto.getNome());
+        destino.setLocalizacao(dto.getLocalizacao());
+        destino.setDescricao(dto.getDescricao());
+        return destinoRepository.save(destino);
+    }
+
+    @Transactional
+    public Destino avaliar(Long id, Double nota) {
+        if (nota == null || nota < 0.0 || nota > 10.0) {
+            throw new BusinessException("A nota de avaliação deve estar entre 0.0 e 10.0.");
         }
-        return null;
+
+        Destino destino = buscarPorId(id);
+        destino.registrarAvaliacao(nota);
+        return destinoRepository.save(destino);
     }
 
-    public boolean excluir(String id) {
-        return destinos.remove(id) != null;
+    @Transactional
+    public void excluir(Long id) {
+        Destino destino = buscarPorId(id);
+        destinoRepository.delete(destino);
     }
 }
