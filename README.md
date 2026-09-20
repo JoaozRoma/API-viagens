@@ -1,265 +1,314 @@
-# ✈️ API de Gerenciamento de Destinos - Agência de Viagens
+# API REST de Destinos — Desafio 2 de Desenvolvimento de Sistemas Web
 
-API RESTful desenvolvida em **Spring Boot 4** e **Java 25**, com persistência de dados relacional via **PostgreSQL / Spring Data JPA** e controle de autenticação e autorização por perfis com **Spring Security** (HTTP Basic + BCrypt).
+Versão evoluída da API de uma agência de viagens, com persistência em **PostgreSQL**, acesso a dados com **Spring Data JPA** e autenticação/autorização com **Spring Security**.
 
----
+## 1. Objetivo e evolução do projeto
 
-## 📌 Sumário
-- [Visão Geral e Evolução do Projeto](#-visão-geral-e-evolução-do-projeto)
-- [Arquitetura e Camadas](#-arquitetura-e-camadas)
-- [Tecnologias Utilizadas](#-tecnologias-utilizadas)
-- [Perfis de Acesso e Segurança](#-perfis-de-acesso-e-segurança)
-- [Credenciais Padrão (Carga Inicial)](#-credenciais-padrão-carga-inicial)
-- [Como Configurar e Executar](#-como-configurar-e-executar)
-  - [Pré-requisitos](#pré-requisitos)
-  - [Configuração do Banco de Dados PostgreSQL](#configuração-do-banco-de-dados-postgresql)
-  - [Executando a Aplicação](#executando-a-aplicação)
-  - [Executando a Suíte de Testes](#executando-a-suíte-de-testes)
-- [Documentação Completa de Endpoints](#-documentação-completa-de-endpoints)
-- [Exemplos de Uso com cURL](#-exemplos-de-uso-com-curl)
+A primeira versão armazenava os destinos apenas em memória, portanto os registros eram perdidos quando a aplicação era encerrada. Nesta versão, destinos e usuários são gravados no PostgreSQL e permanecem disponíveis após reinicializações. A API também passa a controlar o acesso por meio de dois perfis:
 
----
+- `ROLE_ADMIN`: gerencia destinos e usuários;
+- `ROLE_USER`: consulta os recursos públicos e registra avaliações.
 
-## 📖 Visão Geral e Evolução do Projeto
+A autenticação é feita por **HTTP Basic**, sem sessão no servidor. As senhas são armazenadas com hash **BCrypt**. Em ambiente real, HTTP Basic deve ser usado somente por conexão HTTPS.
 
-O projeto evoluiu de um MVP em memória para uma solução corporativa robusta e escalável para uma agência de viagens, cumprindo todos os requisitos modernos de Desenvolvimento de Sistemas Web (DSW):
-1. **Persistência Relacional**: Migração do armazenamento em memória (`ConcurrentHashMap`) para **PostgreSQL** através do **Spring Data JPA / Hibernate**, com tabelas normalizadas e mapeamento de entidades.
-2. **Segurança e Controle de Acesso**: Autenticação stateless via **Spring Security** com senhas criptografadas usando algoritmo **BCrypt**, suporte a múltiplos perfis de acesso (`ROLE_ADMIN` e `ROLE_USER`) e controle granular de permissões por rotas e verbos HTTP.
-3. **Validação e Tratamento de Exceções**: Validação declarativa com `Bean Validation` (Jakarta Validation) e tratamento global uniforme de erros via `@RestControllerAdvice`.
-4. **Carga Automática de Dados (Data Seeder)**: Inicialização inteligente do banco com usuários e destinos de exemplo caso as tabelas estejam vazias.
+## 2. Arquitetura
 
----
+O projeto utiliza arquitetura em camadas para separar responsabilidades:
 
-## 🏗️ Arquitetura e Camadas
-
-A aplicação implementa uma **Arquitetura em Camadas (Layered Architecture)** seguindo as melhores práticas do ecossistema Spring:
-
-```
+```text
 src/main/java/com/agencia/viagens/
- ├── config/             # Configurações de Segurança (SecurityConfig) e Carga Inicial (DataInitializer)
- ├── controller/         # Camada REST (DestinoController, UsuarioController)
- ├── dto/                # Data Transfer Objects (Requests, Responses, Validações)
- ├── exception/          # Exceções customizadas e GlobalExceptionHandler
- ├── model/              # Entidades JPA (Destino, Usuario) e Enums (Role)
- ├── repository/         # Interfaces Spring Data JPA (DestinoRepository, UsuarioRepository)
- └── service/            # Regras de Negócio e Autenticação (DestinoService, UsuarioService)
+├── config/       # Spring Security e carga inicial de dados
+├── controller/   # Rotas HTTP e códigos de resposta
+├── dto/          # Objetos de entrada e saída da API
+├── exception/    # Exceções e tratamento global de erros
+├── model/        # Entidades JPA e enum de perfis
+├── repository/   # Acesso ao banco com Spring Data JPA
+└── service/      # Regras de negócio e transações
 ```
 
----
+Fluxo principal:
 
-## 💻 Tecnologias Utilizadas
+```text
+requisição HTTP → controller → service → repository → PostgreSQL
+                         ↓
+                 regras de negócio
+```
 
-* **Java 25** (OpenJDK)
-* **Spring Boot 4.1.0**
-  * `spring-boot-starter-web` (APIs RESTful e Apache Tomcat embutido)
-  * `spring-boot-starter-data-jpa` (Persistência com Hibernate/JPA)
-  * `spring-boot-starter-security` (Autenticação, Autorização e Criptografia BCrypt)
-  * `spring-boot-starter-validation` (Validações `@NotNull`, `@NotBlank`, `@Size`, `@DecimalMin`, etc.)
-* **PostgreSQL Driver**: Conexão com banco relacional em produção e desenvolvimento.
-* **H2 Database**: Banco relacional em memória para isolamento e agilidade nos testes unitários e integrados.
-* **Maven**: Gerenciamento de dependências e automação de build.
-* **JUnit 5 / Spring Security Test**: Testes automatizados de segurança, serviços e controladores.
+Essa divisão evita acesso direto ao banco nos controladores, facilita testes e permite evoluir cada camada sem concentrar todas as responsabilidades em uma única classe.
 
----
+## 3. Tecnologias
 
-## 🔐 Perfis de Acesso e Segurança
+- Java 17;
+- Spring Boot 4.1.1;
+- Spring Web MVC;
+- Spring Data JPA / Hibernate;
+- PostgreSQL;
+- Spring Security;
+- BCrypt;
+- Jakarta Bean Validation;
+- Maven Wrapper;
+- JUnit 5, MockMvc, Spring Security Test e H2 para testes automatizados.
 
-A API adota **HTTP Basic Authentication** sem estado (*stateless*), protegendo as operações conforme a tabela de permissões:
+## 4. Pré-requisitos
 
-| Recurso / Rota | Verbo HTTP | Acesso Permitido | Descrição |
-| :--- | :--- | :--- | :--- |
-| `/api/destinos/**` | `GET` | **Público** (Livre) | Consulta e listagem de destinos turísticos. |
-| `/api/destinos/{id}/avaliar` | `PATCH` | `ROLE_USER` ou `ROLE_ADMIN` | Registro de notas/avaliações e recálculo da média. |
-| `/api/destinos` | `POST` | `ROLE_ADMIN` | Cadastro de novos destinos. |
-| `/api/destinos/{id}` | `PUT` | `ROLE_ADMIN` | Atualização cadastral de destinos. |
-| `/api/destinos/{id}` | `DELETE` | `ROLE_ADMIN` | Exclusão de destinos. |
-| `/api/usuarios/**` | `GET`, `POST` | `ROLE_ADMIN` | Consulta e cadastro de novos usuários/operadores. |
+- JDK entre 17 e 26 (o projeto compila para Java 17; recomenda-se JDK 17 ou 21);
+- Docker com Docker Compose **ou** PostgreSQL instalado localmente;
+- acesso à internet no primeiro build para o Maven baixar as dependências.
 
----
+Não é necessário instalar Maven globalmente, pois o repositório contém `mvnw`, `mvnw.cmd` e `.mvn/wrapper/maven-wrapper.properties`.
 
-## 👤 Credenciais Padrão (Carga Inicial)
+## 5. Configuração do PostgreSQL
 
-Ao iniciar a aplicação pela primeira vez com o banco vazio, o componente `DataInitializer` cadastra automaticamente as credenciais de teste com hash BCrypt:
+### Opção A — Docker Compose
 
-| Perfil | Usuário (`username`) | Senha (`password`) | Permissões |
-| :--- | :--- | :--- | :--- |
-| **Administrador** | `admin` | `admin123` | Acesso irrestrito (CRUD de destinos e gestão de usuários) |
-| **Usuário Comum** | `user` | `user123` | Consulta pública e avaliação de destinos |
+Na raiz do projeto:
 
----
+```bash
+docker compose up -d
+```
 
-## 🚀 Como Configurar e Executar
+O arquivo `compose.yaml` cria um banco de desenvolvimento local:
 
-### Pré-requisitos
-- **Java JDK 17+** (recomendado Java 21 ou Java 25).
-- **PostgreSQL 14+** instalado e em execução (porta 5432).
-- **Maven** (ou o wrapper `./mvnw` incluso no projeto).
+- banco: `viagens_db`;
+- usuário: `postgres`;
+- senha: `postgres`;
+- porta: `5432`.
 
----
+Para encerrar:
 
-### Configuração do Banco de Dados PostgreSQL
+```bash
+docker compose down
+```
 
-1. Crie a base de dados no PostgreSQL:
+Para apagar também o volume de dados:
+
+```bash
+docker compose down -v
+```
+
+### Opção B — PostgreSQL local
+
+Crie o banco:
+
 ```sql
 CREATE DATABASE viagens_db;
 ```
 
-2. As propriedades de conexão padrão estão em [application.properties](file:///C:/Users/Roma/IdeaProjects/API-viagens/src/main/resources/application.properties):
+A aplicação usa os seguintes valores padrão:
+
 ```properties
-spring.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:viagens_db}
-spring.datasource.username=${DB_USER:postgres}
-spring.datasource.password=${DB_PASSWORD:postgres}
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
-server.port=8081
+DB_URL=jdbc:postgresql://localhost:5432/viagens_db
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+SERVER_PORT=8081
+APP_SEED_ENABLED=true
 ```
 
----
+As variáveis podem ser definidas no sistema operacional sem alterar o código. Exemplos:
 
-### Executando a Aplicação
+**PowerShell**
 
-Compile e inicie o servidor:
+```powershell
+$env:DB_URL="jdbc:postgresql://localhost:5432/viagens_db"
+$env:DB_USERNAME="postgres"
+$env:DB_PASSWORD="sua_senha"
+```
+
+**Linux/macOS**
+
 ```bash
+export DB_URL="jdbc:postgresql://localhost:5432/viagens_db"
+export DB_USERNAME="postgres"
+export DB_PASSWORD="sua_senha"
+```
+
+O mapeamento das propriedades está em `src/main/resources/application.properties`.
+
+## 6. Execução
+
+### Linux/macOS
+
+```bash
+chmod +x mvnw
 ./mvnw spring-boot:run
 ```
-*(No Windows PowerShell: `mvn spring-boot:run` ou `.\mvnw.cmd spring-boot:run`)*
 
-A API estará acessível em `http://localhost:8081`.
+### Windows PowerShell
 
----
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
-### Executando a Suíte de Testes
+A API ficará disponível em:
 
-Os testes são executados automaticamente em banco H2 isolado:
+```text
+http://localhost:8081
+```
+
+Na primeira inicialização, o Hibernate cria/atualiza as tabelas `tb_destinos` e `tb_usuarios`. O `DataInitializer` inclui usuários e destinos de demonstração somente quando os registros correspondentes ainda não existem. Para desativar essa carga acadêmica, defina `APP_SEED_ENABLED=false`.
+
+## 7. Usuários de teste
+
+| Perfil | Usuário | Senha | Uso |
+|---|---|---|---|
+| `ROLE_ADMIN` | `admin` | `admin123` | CRUD de destinos e gestão de usuários |
+| `ROLE_USER` | `user` | `user123` | Avaliação de destinos |
+
+Essas credenciais são apenas para demonstração acadêmica. Devem ser alteradas ou removidas antes de qualquer implantação real.
+
+### Fluxo da autenticação
+
+1. O cliente envia usuário e senha no cabeçalho `Authorization: Basic ...` em cada requisição protegida.
+2. O Spring Security encaminha o nome de usuário ao `UsuarioService`, que implementa `UserDetailsService`.
+3. O serviço consulta `tb_usuarios` por meio do `UsuarioRepository`.
+4. O `PasswordEncoder` compara a senha recebida com o hash BCrypt armazenado; a senha original não é recuperada nem retornada.
+5. Após autenticar, o perfil `ROLE_ADMIN` ou `ROLE_USER` é usado pela `SecurityFilterChain` para autorizar ou negar a rota.
+
+Não existe endpoint próprio de “login” porque o HTTP Basic autentica cada requisição. A codificação Base64 do cabeçalho não é criptografia; por isso, HTTPS é obrigatório fora do ambiente acadêmico local.
+
+## 8. Regras de acesso
+
+| Método e rota | Acesso | Resultado principal |
+|---|---|---|
+| `GET /api/destinos` | Público | Lista destinos |
+| `GET /api/destinos/{id}` | Público | Detalha um destino |
+| `GET /api/destinos/pesquisar` | Público | Pesquisa por nome e/ou localização |
+| `POST /api/destinos` | `ROLE_ADMIN` | Cadastra destino (`201 Created`) |
+| `PUT /api/destinos/{id}` | `ROLE_ADMIN` | Atualiza destino (`200 OK`) |
+| `PATCH /api/destinos/{id}/avaliar` | `ROLE_USER` ou `ROLE_ADMIN` | Registra nota de `0.0` a `10.0` |
+| `DELETE /api/destinos/{id}` | `ROLE_ADMIN` | Exclui destino (`204 No Content`) |
+| `GET /api/usuarios` | `ROLE_ADMIN` | Lista usuários sem expor senhas |
+| `GET /api/usuarios/{id}` | `ROLE_ADMIN` | Detalha usuário sem expor senha |
+| `POST /api/usuarios` | `ROLE_ADMIN` | Cadastra usuário com senha BCrypt |
+
+Comportamento esperado da segurança:
+
+- `401 Unauthorized`: credenciais ausentes ou inválidas;
+- `403 Forbidden`: usuário autenticado sem o perfil necessário;
+- `400 Bad Request`: corpo ou campos inválidos;
+- `404 Not Found`: recurso inexistente;
+- `409 Conflict`: violação de restrição de integridade.
+
+## 9. Exemplos com cURL
+
+### Consulta pública
+
 ```bash
-./mvnw test
+curl http://localhost:8081/api/destinos
 ```
 
----
+### Pesquisa pública
 
-## 📡 Documentação Completa de Endpoints
-
-### 1. Destinos Turísticos (`/api/destinos`)
-
-#### `GET /api/destinos`
-- **Acesso**: Público
-- **Descrição**: Retorna a lista de todos os destinos cadastrados.
-- **Resposta**: `200 OK`
-
-#### `GET /api/destinos/{id}`
-- **Acesso**: Público
-- **Descrição**: Retorna os detalhes de um destino por ID.
-- **Resposta**: `200 OK` (ou `404 Not Found`)
-
-#### `GET /api/destinos/pesquisar?nome={nome}&localizacao={localizacao}`
-- **Acesso**: Público
-- **Descrição**: Busca destinos por correspondência parcial de nome ou localização (ambos opcionais).
-- **Resposta**: `200 OK`
-
-#### `POST /api/destinos`
-- **Acesso**: `ROLE_ADMIN`
-- **Descrição**: Cadastra um novo destino turístico.
-- **Corpo da Requisição (JSON)**:
-```json
-{
-  "nome": "Fernando de Noronha",
-  "localizacao": "Pernambuco, Brasil",
-  "descricao": "Arquipélago vulcânico com praias paradisíacas e rica vida marinha."
-}
-```
-- **Resposta**: `201 Created`
-
-#### `PUT /api/destinos/{id}`
-- **Acesso**: `ROLE_ADMIN`
-- **Descrição**: Atualiza todos os dados descritivos de um destino existente.
-- **Corpo da Requisição (JSON)**:
-```json
-{
-  "nome": "Fernando de Noronha - Atualizado",
-  "localizacao": "Pernambuco, Brasil",
-  "descricao": "Parque Nacional Marinho protegido com ecoturismo sustentável."
-}
-```
-- **Resposta**: `200 OK` (ou `404 Not Found`)
-
-#### `PATCH /api/destinos/{id}/avaliar`
-- **Acesso**: `ROLE_USER` ou `ROLE_ADMIN`
-- **Descrição**: Insere uma nova avaliação (nota entre 0 e 10) e recalcula a média e a quantidade de avaliações.
-- **Corpo da Requisição (JSON)**:
-```json
-{
-  "nota": 9.5
-}
-```
-- **Resposta**: `200 OK` (ou `400 Bad Request` se nota < 0 ou nota > 10, ou `404 Not Found`)
-
-#### `DELETE /api/destinos/{id}`
-- **Acesso**: `ROLE_ADMIN`
-- **Descrição**: Remove um destino do sistema.
-- **Resposta**: `204 No Content` (ou `404 Not Found`)
-
----
-
-### 2. Gestão de Usuários (`/api/usuarios`)
-
-#### `GET /api/usuarios`
-- **Acesso**: `ROLE_ADMIN`
-- **Descrição**: Lista todos os usuários cadastrados (sem expor as senhas).
-- **Resposta**: `200 OK`
-
-#### `POST /api/usuarios`
-- **Acesso**: `ROLE_ADMIN`
-- **Descrição**: Cadastra um novo usuário no sistema. A senha é automaticamente criptografada com BCrypt.
-- **Corpo da Requisição (JSON)**:
-```json
-{
-  "username": "operador_guia",
-  "password": "senhaForte@123",
-  "role": "ROLE_USER"
-}
-```
-- **Resposta**: `201 Created` (ou `400 Bad Request` se o username já existir)
-
----
-
-## 💻 Exemplos de Uso com cURL
-
-### 1. Listar todos os destinos (Público)
 ```bash
-curl -X GET http://localhost:8081/api/destinos
+curl "http://localhost:8081/api/destinos/pesquisar?nome=Noronha&localizacao=Pernambuco"
 ```
 
-### 2. Pesquisar destinos por nome ou localização (Público)
-```bash
-curl -X GET "http://localhost:8081/api/destinos/pesquisar?nome=Noronha"
-```
+### Cadastro de destino como ADMIN
 
-### 3. Cadastrar destino (Requer ADMIN)
 ```bash
 curl -X POST http://localhost:8081/api/destinos \
   -u admin:admin123 \
   -H "Content-Type: application/json" \
-  -d "{\"nome\":\"Bonito\",\"localizacao\":\"Mato Grosso do Sul, Brasil\",\"descricao\":\"Capital do ecoturismo com rios de águas cristalinas.\"}"
+  -d '{"nome":"Bonito","localizacao":"Mato Grosso do Sul, Brasil","descricao":"Destino de ecoturismo."}'
 ```
 
-### 4. Avaliar um destino (Permitido para USER e ADMIN)
+### Avaliação como USER
+
 ```bash
 curl -X PATCH http://localhost:8081/api/destinos/1/avaliar \
   -u user:user123 \
   -H "Content-Type: application/json" \
-  -d "{\"nota\": 10.0}"
+  -d '{"nota":9.5}'
 ```
 
-### 5. Excluir destino (Requer ADMIN)
-```bash
-curl -X DELETE http://localhost:8081/api/destinos/1 \
-  -u admin:admin123
-```
+### Cadastro de usuário como ADMIN
 
-### 6. Criar novo usuário (Requer ADMIN)
 ```bash
 curl -X POST http://localhost:8081/api/usuarios \
   -u admin:admin123 \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"agente_joao\",\"password\":\"viagem2026\",\"role\":\"ROLE_USER\"}"
+  -d '{"username":"operador","password":"senhaSegura123","role":"ROLE_USER"}'
 ```
+
+O arquivo `api-exemplos.http` contém uma coleção adicional para IntelliJ IDEA, VS Code com REST Client ou ferramenta compatível.
+
+## 10. Testes automatizados
+
+Os testes usam H2 em memória e não alteram o banco PostgreSQL local:
+
+```bash
+./mvnw clean test
+```
+
+No Windows:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+A suíte verifica, entre outros pontos:
+
+- persistência e operações da camada de serviço;
+- pesquisa por nome e localização;
+- cálculo correto da média das avaliações;
+- hash BCrypt das senhas;
+- autenticação com usuários realmente carregados do banco de teste;
+- respostas `401`, `403`, `400`, `404`, `201` e `204`;
+- regras distintas de `ROLE_ADMIN` e `ROLE_USER`;
+- ausência de senha nas respostas da API.
+
+Para gerar o pacote executável:
+
+```bash
+./mvnw clean package
+```
+
+## 11. Estrutura das tabelas
+
+### `tb_destinos`
+
+- `id`: chave primária gerada automaticamente;
+- `nome`: obrigatório, até 150 caracteres;
+- `localizacao`: obrigatória, até 150 caracteres;
+- `descricao`: opcional, até 1000 caracteres;
+- `media_avaliacoes`: média acumulada;
+- `quantidade_avaliacoes`: total de avaliações recebidas.
+
+### `tb_usuarios`
+
+- `id`: chave primária gerada automaticamente;
+- `username`: obrigatório e único;
+- `password`: hash BCrypt, nunca retornado pela API;
+- `role`: `ROLE_ADMIN` ou `ROLE_USER`.
+
+Não há relacionamento obrigatório entre essas duas entidades no escopo proposto: a atividade exige o registro da média do destino, mas não exige histórico individual de avaliações por usuário.
+
+## 12. Decisões técnicas
+
+- **PostgreSQL** garante persistência após reinicializações e atende ao requisito de banco relacional.
+- **Spring Data JPA** reduz código repetitivo de acesso a dados e mantém o acesso ao banco concentrado nos repositories.
+- **Spring Security** centraliza autenticação e autorização por perfil.
+- **HTTP Basic stateless** é suficiente para demonstrar autenticação em uma API acadêmica; em produção, deve operar sobre HTTPS.
+- **CSRF desativado no escopo acadêmico:** a API não usa formulário, cookie de sessão nem estado no servidor. Em uma aplicação voltada a navegadores, a estratégia deve ser reavaliada em conjunto com o mecanismo de autenticação.
+- **Carga inicial configurável** facilita a correção acadêmica e pode ser desativada com `APP_SEED_ENABLED=false`.
+- **`ddl-auto=update`** foi mantido para facilitar a atividade; em produção, o ideal é versionar alterações de esquema com Flyway ou Liquibase.
+- **BCrypt** impede o armazenamento de senhas em texto puro.
+- **DTOs** separam o contrato HTTP das entidades e evitam exposição da senha.
+- **Tratamento global de exceções** mantém os erros de validação e negócio consistentes.
+- **H2 nos testes** torna a suíte repetível e independente do PostgreSQL local; o modo de compatibilidade PostgreSQL reduz diferenças de sintaxe.
+
+## 13. Checklist de entrega
+
+Antes de enviar o link no Ambiente Virtual de Aprendizagem:
+
+- [ ] Executar `./mvnw clean test` e confirmar `BUILD SUCCESS`;
+- [ ] subir o PostgreSQL e executar `./mvnw spring-boot:run`;
+- [ ] testar um `GET` público, um acesso `401`, um acesso `403`, um cadastro ADMIN e uma avaliação USER;
+- [ ] confirmar no PostgreSQL que os dados permanecem após reiniciar a aplicação;
+- [ ] consultar `SELECT id, nome FROM tb_destinos;` no PostgreSQL para registrar evidência da persistência;
+- [ ] conferir que `.env`, senhas pessoais, `.idea` e `target` não foram enviados;
+- [ ] manter `README.md`, `compose.yaml`, `.mvn/`, `mvnw`, `mvnw.cmd`, `pom.xml` e `src/` no repositório;
+- [ ] realizar commits claros e verificar o histórico no Git;
+- [ ] enviar o endereço correto do repositório no AVA dentro do prazo.
+
+O relatório detalhado da revisão está em `docs/RELATORIO_REVISAO_DESAFIO_2.md`. O procedimento de commits e envio está em `docs/GUIA_ENTREGA_GIT.md`.

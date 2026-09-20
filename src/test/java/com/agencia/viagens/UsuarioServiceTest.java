@@ -13,9 +13,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Transactional
@@ -27,44 +32,80 @@ class UsuarioServiceTest {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @Test
-    @DisplayName("Deve cadastrar um novo usuário com senha criptografada")
+    @DisplayName("Deve cadastrar usuário com senha BCrypt e username normalizado")
     void deveCadastrarUsuarioComSenhaCriptografada() {
-        UsuarioRequestDTO dto = new UsuarioRequestDTO("novousuario", "senhaSegura123", Role.ROLE_USER);
+        UsuarioRequestDTO dto = new UsuarioRequestDTO(
+                "  novousuario  ",
+                "senhaSegura123",
+                Role.ROLE_USER);
+
         UsuarioResponseDTO salvo = usuarioService.cadastrar(dto);
 
         assertNotNull(salvo.getId());
         assertEquals("novousuario", salvo.getUsername());
         assertEquals(Role.ROLE_USER, salvo.getRole());
 
-        Usuario usuarioBanco = usuarioRepository.findByUsername("novousuario").orElseThrow();
+        Usuario usuarioBanco = usuarioRepository
+                .findByUsername("novousuario")
+                .orElseThrow();
         assertNotEquals("senhaSegura123", usuarioBanco.getPassword());
-        assertTrue(usuarioBanco.getPassword().startsWith("$2a$") || usuarioBanco.getPassword().startsWith("$2b$") || usuarioBanco.getPassword().startsWith("$2y$"));
+        assertTrue(passwordEncoder.matches(
+                "senhaSegura123", usuarioBanco.getPassword()));
     }
 
     @Test
-    @DisplayName("Deve impedir cadastro de usuário com username duplicado")
+    @DisplayName("Deve impedir username duplicado após normalização")
     void deveImpedirUsernameDuplicado() {
-        UsuarioRequestDTO dto = new UsuarioRequestDTO("usuarioDuplicado", "senha12345", Role.ROLE_USER);
-        usuarioService.cadastrar(dto);
+        usuarioService.cadastrar(new UsuarioRequestDTO(
+                "usuarioDuplicado", "senha12345", Role.ROLE_USER));
 
-        assertThrows(BusinessException.class, () -> usuarioService.cadastrar(dto));
+        assertThrows(BusinessException.class,
+                () -> usuarioService.cadastrar(new UsuarioRequestDTO(
+                        "  usuarioDuplicado  ",
+                        "outraSenha123",
+                        Role.ROLE_USER)));
+    }
+
+
+    @Test
+    @DisplayName("Deve rejeitar username que fica curto após remover espaços")
+    void deveRejeitarUsernameCurtoAposNormalizacao() {
+        assertThrows(BusinessException.class,
+                () -> usuarioService.cadastrar(new UsuarioRequestDTO(
+                        "  a  ", "senha123", Role.ROLE_USER)));
     }
 
     @Test
-    @DisplayName("Deve carregar usuário por username através do UserDetailsService")
+    @DisplayName("Deve rejeitar perfil nulo na camada de serviço")
+    void deveRejeitarPerfilNulo() {
+        assertThrows(BusinessException.class,
+                () -> usuarioService.cadastrar(new UsuarioRequestDTO(
+                        "semperfil", "senha123", null)));
+    }
+
+    @Test
+    @DisplayName("Deve carregar usuário do banco para autenticação")
     void deveCarregarUsuarioPorUsername() {
-        usuarioService.cadastrar(new UsuarioRequestDTO("authuser", "senha123", Role.ROLE_ADMIN));
+        usuarioService.cadastrar(new UsuarioRequestDTO(
+                "authuser", "senha123", Role.ROLE_ADMIN));
 
-        UserDetails userDetails = usuarioService.loadUserByUsername("authuser");
-        assertNotNull(userDetails);
+        UserDetails userDetails = usuarioService
+                .loadUserByUsername("authuser");
+
         assertEquals("authuser", userDetails.getUsername());
-        assertTrue(userDetails.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));
+        assertTrue(userDetails.getAuthorities().stream()
+                .anyMatch(authority ->
+                        authority.getAuthority().equals("ROLE_ADMIN")));
     }
 
     @Test
-    @DisplayName("Deve lançar exceção ao buscar usuário inexistente")
+    @DisplayName("Deve lançar exceção ao autenticar usuário inexistente")
     void deveLancarExcecaoAoBuscarUsuarioInexistente() {
-        assertThrows(UsernameNotFoundException.class, () -> usuarioService.loadUserByUsername("inexistente"));
+        assertThrows(UsernameNotFoundException.class,
+                () -> usuarioService.loadUserByUsername("inexistente"));
     }
 }

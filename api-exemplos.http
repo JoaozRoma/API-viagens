@@ -1,0 +1,65 @@
+### Variáveis
+@baseUrl = http://localhost:8081
+@adminUser = admin
+@adminPassword = admin123
+@commonUser = user
+@commonPassword = user123
+
+### Listar destinos — público
+GET {{baseUrl}}/api/destinos
+
+### Pesquisar destinos — público
+GET {{baseUrl}}/api/destinos/pesquisar?nome=Noronha&localizacao=Pernambuco
+
+### Buscar destino por ID — público
+GET {{baseUrl}}/api/destinos/1
+
+### Cadastrar destino — somente ADMIN
+POST {{baseUrl}}/api/destinos
+Authorization: Basic {{adminUser}} {{adminPassword}}
+Content-Type: application/json
+
+{
+  "nome": "Bonito",
+  "localizacao": "Mato Grosso do Sul, Brasil",
+  "descricao": "Destino conhecido pelo ecoturismo."
+}
+
+### Atualizar destino — somente ADMIN
+PUT {{baseUrl}}/api/destinos/1
+Authorization: Basic {{adminUser}} {{adminPassword}}
+Content-Type: application/json
+
+{
+  "nome": "Fernando de Noronha",
+  "localizacao": "Pernambuco, Brasil",
+  "descricao": "Arquipélago brasileiro com áreas de preservação ambiental."
+}
+
+### Avaliar destino — USER ou ADMIN
+PATCH {{baseUrl}}/api/destinos/1/avaliar
+Authorization: Basic {{commonUser}} {{commonPassword}}
+Content-Type: application/json
+
+{
+  "nota": 9.5
+}
+
+### Excluir destino — somente ADMIN
+DELETE {{baseUrl}}/api/destinos/1
+Authorization: Basic {{adminUser}} {{adminPassword}}
+
+### Listar usuários — somente ADMIN
+GET {{baseUrl}}/api/usuarios
+Authorization: Basic {{adminUser}} {{adminPassword}}
+
+### Cadastrar usuário — somente ADMIN
+POST {{baseUrl}}/api/usuarios
+Authorization: Basic {{adminUser}} {{adminPassword}}
+Content-Type: application/json
+
+{
+  "username": "operador",
+  "password": "senhaSegura123",
+  "role": "ROLE_USER"
+}
