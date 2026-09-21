@@ -6,7 +6,6 @@ import com.agencia.viagens.exception.BusinessException;
 import com.agencia.viagens.exception.ResourceNotFoundException;
 import com.agencia.viagens.model.Usuario;
 import com.agencia.viagens.repository.UsuarioRepository;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -22,30 +21,44 @@ public class UsuarioService implements UserDetailsService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepository, @Lazy PasswordEncoder passwordEncoder) {
+    public UsuarioService(UsuarioRepository usuarioRepository,
+                          PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    @Transactional(readOnly = true)
+    public UserDetails loadUserByUsername(String username)
+            throws UsernameNotFoundException {
         return usuarioRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "Usuário não encontrado: " + username));
     }
 
     @Transactional
     public UsuarioResponseDTO cadastrar(UsuarioRequestDTO dto) {
-        if (usuarioRepository.existsByUsername(dto.getUsername())) {
-            throw new BusinessException("Nome de usuário já cadastrado no sistema.");
+        if (dto == null) {
+            throw new BusinessException("Os dados do usuário são obrigatórios.");
         }
 
-        Usuario usuario = new Usuario();
-        usuario.setUsername(dto.getUsername());
-        usuario.setPassword(passwordEncoder.encode(dto.getPassword()));
-        usuario.setRole(dto.getRole());
+        String username = normalizarUsername(dto.getUsername());
+        validarSenha(dto.getPassword());
+        if (dto.getRole() == null) {
+            throw new BusinessException("O perfil de acesso é obrigatório.");
+        }
 
-        Usuario salvo = usuarioRepository.save(usuario);
-        return UsuarioResponseDTO.fromEntity(salvo);
+        if (usuarioRepository.existsByUsername(username)) {
+            throw new BusinessException(
+                    "Nome de usuário já cadastrado no sistema.");
+        }
+
+        Usuario usuario = new Usuario(
+                username,
+                passwordEncoder.encode(dto.getPassword()),
+                dto.getRole());
+
+        return UsuarioResponseDTO.fromEntity(usuarioRepository.save(usuario));
     }
 
     @Transactional(readOnly = true)
@@ -55,10 +68,32 @@ public class UsuarioService implements UserDetailsService {
                 .toList();
     }
 
+    private String normalizarUsername(String valor) {
+        if (valor == null || valor.isBlank()) {
+            throw new BusinessException("O nome de usuário é obrigatório.");
+        }
+
+        String username = valor.trim();
+        if (username.length() < 3 || username.length() > 50) {
+            throw new BusinessException(
+                    "O nome de usuário deve ter entre 3 e 50 caracteres.");
+        }
+        return username;
+    }
+
+    private void validarSenha(String senha) {
+        if (senha == null || senha.isBlank() || senha.length() < 6) {
+            throw new BusinessException(
+                    "A senha deve ter no mínimo 6 caracteres.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public UsuarioResponseDTO buscarPorId(Long id) {
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado com id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuário não encontrado com ID: " + id));
+
         return UsuarioResponseDTO.fromEntity(usuario);
     }
 }

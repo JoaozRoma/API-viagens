@@ -6,10 +6,13 @@ import com.agencia.viagens.model.Usuario;
 import com.agencia.viagens.repository.DestinoRepository;
 import com.agencia.viagens.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
-@Configuration
+@Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
 public class DataInitializer implements CommandLineRunner {
 
     private final UsuarioRepository usuarioRepository;
@@ -25,51 +28,46 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     @Override
+    @Transactional
     public void run(String... args) {
-        // Inicialização de Usuários Padrão para Teste
-        if (!usuarioRepository.existsByUsername("admin")) {
-            Usuario admin = new Usuario();
-            admin.setUsername("admin");
-            admin.setPassword(passwordEncoder.encode("admin123"));
-            admin.setRole(Role.ROLE_ADMIN);
-            usuarioRepository.save(admin);
-        }
+        criarUsuarioSeAusente("admin", "admin123", Role.ROLE_ADMIN);
+        criarUsuarioSeAusente("user", "user123", Role.ROLE_USER);
 
-        if (!usuarioRepository.existsByUsername("user")) {
-            Usuario user = new Usuario();
-            user.setUsername("user");
-            user.setPassword(passwordEncoder.encode("user123"));
-            user.setRole(Role.ROLE_USER);
-            usuarioRepository.save(user);
-        }
-
-        // Inicialização de Destinos de Exemplo (se a base estiver vazia)
         if (destinoRepository.count() == 0) {
-            Destino d1 = new Destino(
+            Destino noronha = new Destino(
                     "Fernando de Noronha",
                     "Pernambuco, Brasil",
-                    "Arquipélago vulcânico paradisíaco famoso por praias intocadas e mergulho com tartarugas e golfinhos."
-            );
-            d1.registrarAvaliacao(9.8);
-            d1.registrarAvaliacao(10.0);
-            destinoRepository.save(d1);
+                    "Arquipélago vulcânico conhecido por praias preservadas e mergulho.");
+            noronha.registrarAvaliacao(9.8);
+            noronha.registrarAvaliacao(10.0);
+            destinoRepository.save(noronha);
 
-            Destino d2 = new Destino(
+            Destino gramado = new Destino(
                     "Gramado",
                     "Rio Grande do Sul, Brasil",
-                    "Charmosa cidade na Serra Gaúcha com arquitetura alpina, chocolates artesanais e festivais de cinema e Natal."
-            );
-            d2.registrarAvaliacao(8.5);
-            d2.registrarAvaliacao(9.0);
-            destinoRepository.save(d2);
+                    "Cidade da Serra Gaúcha conhecida pelo turismo e pelos eventos sazonais.");
+            gramado.registrarAvaliacao(8.5);
+            gramado.registrarAvaliacao(9.0);
+            destinoRepository.save(gramado);
 
-            Destino d3 = new Destino(
+            Destino salvador = new Destino(
                     "Salvador",
                     "Bahia, Brasil",
-                    "Capital histórica rica em cultura afro-brasileira, centro histórico no Pelourinho, gastronomia típica e praias tropicais."
-            );
-            d3.registrarAvaliacao(9.0);
-            destinoRepository.save(d3);
+                    "Capital histórica com patrimônio cultural, gastronomia e praias.");
+            salvador.registrarAvaliacao(9.0);
+            destinoRepository.save(salvador);
+        }
+    }
+
+    private void criarUsuarioSeAusente(String username,
+                                       String senha,
+                                       Role role) {
+        if (!usuarioRepository.existsByUsername(username)) {
+            Usuario usuario = new Usuario(
+                    username,
+                    passwordEncoder.encode(senha),
+                    role);
+            usuarioRepository.save(usuario);
         }
     }
 }

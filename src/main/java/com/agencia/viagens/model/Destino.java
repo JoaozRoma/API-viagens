@@ -1,6 +1,11 @@
 package com.agencia.viagens.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -32,31 +37,28 @@ public class Destino {
     @Column(nullable = false)
     private int quantidadeAvaliacoes;
 
-    public Destino() {
+    protected Destino() {
+        // Construtor exigido pela JPA.
+    }
+
+    public Destino(String nome, String localizacao, String descricao) {
+        this.nome = nome;
+        this.localizacao = localizacao;
+        this.descricao = descricao;
         this.mediaAvaliacoes = 0.0;
         this.quantidadeAvaliacoes = 0;
     }
 
-    public Destino(String nome, String localizacao, String descricao) {
-        this();
-        this.nome = nome;
-        this.localizacao = localizacao;
-        this.descricao = descricao;
-    }
-
     public void registrarAvaliacao(double nota) {
-        double somaAtual = this.mediaAvaliacoes * this.quantidadeAvaliacoes;
-        somaAtual += nota;
-        this.quantidadeAvaliacoes++;
-        this.mediaAvaliacoes = Math.round((somaAtual / this.quantidadeAvaliacoes) * 10.0) / 10.0;
+        double somaAtual = mediaAvaliacoes * quantidadeAvaliacoes;
+        int novaQuantidade = quantidadeAvaliacoes + 1;
+
+        mediaAvaliacoes = (somaAtual + nota) / novaQuantidade;
+        quantidadeAvaliacoes = novaQuantidade;
     }
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getNome() {
@@ -87,15 +89,7 @@ public class Destino {
         return mediaAvaliacoes;
     }
 
-    public void setMediaAvaliacoes(double mediaAvaliacoes) {
-        this.mediaAvaliacoes = mediaAvaliacoes;
-    }
-
     public int getQuantidadeAvaliacoes() {
         return quantidadeAvaliacoes;
-    }
-
-    public void setQuantidadeAvaliacoes(int quantidadeAvaliacoes) {
-        this.quantidadeAvaliacoes = quantidadeAvaliacoes;
     }
 }
